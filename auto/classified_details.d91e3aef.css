@@ -1321,16 +1321,7 @@ a.newsLinkHomePage {
   text-align: left;
   display: block;
 }
-@font-face {
-  font-family: lg;
-  src: url(/bundles/site/css/fonts/lg.eot?n1z373);
-  src: url(/bundles/site/fonts/lg.eot?#iefixn1z373) format("embedded-opentype"),
-    url(/bundles/site/fonts/lg.woff?n1z373) format("woff"),
-    url(/bundles/site/fonts/lg.ttf?n1z373) format("truetype"),
-    url(/bundles/site/fonts/lg.svg?n1z373#lg) format("svg");
-  font-weight: 400;
-  font-style: normal;
-}
+
 .lslide img {
   max-height: 600px;
 }
@@ -1953,19 +1944,8 @@ span.carThumbHolder picture {
 .driver-highlighted-element-stage {
   left: 16px;
 }
-@font-face {
-  font-family: lg;
-  src: url(/build/images/lg.98d62b1e.svg);
-  src: url(/build/fonts/lg.ecff1170.eot?#iefixn1z373)
-      format("embedded-opentype"),
-    url(/build/fonts/lg.5fd4c338.woff) format("woff"),
-    url(/build/fonts/lg.4fe6f9ca.ttf) format("truetype"),
-    url(/build/images/lg.98d62b1e.svg#lg) format("svg");
-  font-weight: 400;
-  font-style: normal;
-}
+
 .lg-icon {
-  font-family: lg;
   speak: none;
   font-style: normal;
   font-weight: 400;
