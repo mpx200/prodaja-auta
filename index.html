@@ -3093,49 +3093,7 @@
     <script src="./auto/firebase-database.js.download"></script>
     <script src="./auto/firebase-messaging.js.download"></script>
 
-    <script>
-      // Initialize Firebase
-      var config = {
-        apiKey: "AIzaSyA64EFLZr97ZcbrBy0rbe1KOqymCkrwxOE",
-        authDomain: "push-notifications-pa-69c98.firebaseapp.com",
-        databaseURL: "https://push-notifications-pa-69c98.firebaseio.com",
-        projectId: "push-notifications-pa-69c98",
-        storageBucket: "push-notifications-pa-69c98.appspot.com",
-        messagingSenderId: "42856224115",
-      };
-
-      firebase.initializeApp(config);
-      try {
-        const messaging = firebase.messaging();
-
-        if (Notification.permission === "granted") {
-          messaging.onMessage(function (payload) {
-            var message =
-              '<a href="' +
-              payload.notification.click_action +
-              '">' +
-              payload.notification.title +
-              '<span class="title"> ' +
-              payload.notification.body +
-              " </span>";
-            if (
-              payload.notification.click_action != "undefined" &&
-              payload.notification.click_action != ""
-            ) {
-              message += "<br>Klikni ovde da vidiš</a>";
-            }
-            UIkit.notify({
-              message: message,
-              status: "info",
-              timeout: 10000,
-              pos: "bottom-right",
-            });
-          });
-        }
-      } catch (
-        error // Maybe firebase messaging is not supported on this browser
-      ) {}
-    </script>
+ 
 
     <script src="./auto/notify.js.download"></script>
     <script src="./auto/sticky.js.download"></script>
