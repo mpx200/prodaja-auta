@@ -1,0 +1,77 @@
+var PA = PA || {};
+
+PA.ips = {
+	
+	attempts: 0,
+	
+	init: function(classifiedId, price, featureType, description) {
+		$('#try_again').hide();
+		
+		$.post('/qr/init',{
+			'classifiedId': classifiedId,
+			'type':featureType
+		},function(response){
+			$.post('/qr/generate/' + response.transactionId,{
+				'description': description
+			}, function(response) {
+				if (!$('#try_again').is(':visible'))
+					{
+					// if its visible it means there was error in other ajax before this finished
+					$('#ips_qr').attr('src',response.qr_code);
+					}
+			});
+			
+			PA.ips.wait(response.transactionId);
+		});
+	},
+	
+	wait: function(transactionId) {
+		$.getJSON('/qr/send/' + transactionId, function(response) {
+			if (response.status == 'timeout')
+				{
+				PA.ips.attempts++;
+				if (PA.ips.attempts < 5)
+					{
+					PA.ips.wait(transactionId);
+					}
+				else
+					{
+					PA.ips.timeout();
+					if ($('#ips_qr').filter(":visible").length)
+						{
+						UIkit.modal.alert('IPS QR kod više nije validan, molimo te da pokušaš ponovo.', {
+							'labels': {
+								'Ok': 'U redu'
+							}
+						});
+						}
+					}
+				}
+			else if (response.status == 'paid')
+				{
+				$('#ips_qr').attr('src','');
+				$('.js-IPS_intro_text').slideUp();
+				$('#ips_thanks').fadeIn(150);
+				PA.ips.attempts = 0;
+				}
+			else
+				{
+				PA.ips.timeout();
+				if ($('#ips_qr').filter(":visible").length)
+					{
+					UIkit.modal.alert('Transakcija nije izvršena, molimo te da pokušaš ponovo.', {
+						'labels': {
+							'Ok': 'U redu'
+						}
+					});
+					}
+				}
+		});
+	},
+	
+	timeout: function() {
+		$('#ips_qr').attr('src','');
+		$('#try_again').show();
+		PA.ips.attempts = 0;
+	}
+};

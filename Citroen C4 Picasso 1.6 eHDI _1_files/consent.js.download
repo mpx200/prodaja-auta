@@ -1,0 +1,274 @@
+var PA = PA || {};
+
+PA.consent = {
+
+	// Main consent
+	easySaleSelected: false,
+	easySaleCardPurchaseSelected: false,
+	easySaleProfileSaleSelected: false,
+	easyBuySelected: false,
+	easyBuyPartsOnClickSelected: false,
+	easyBuyPurchaseAnnouncementSelected: false,
+	easyBuyProfileBuySelected: false,
+	easyBuyTestRideSelected: false,
+	easyBuyAdFollowSelected: false,
+	easyBuyInterestedInPurchaseSelected: false,
+	easyBuyPurchaseConfirmationSelected: false,
+	shareSelected: false,
+	imagesSelected: false,
+	mailingListSelected: false,
+	showDialog: false,
+	viberSelected: false,
+	preventDoubleInit: true,
+
+	init: function(dealerPage) {
+		if(PA.consent.preventDoubleInit) {
+			PA.consent.bindParentConsents();
+			PA.consent.bindChildConsents();
+			PA.consent.ajaxSubmit(dealerPage);
+			PA.consent.preventDoubleInit = false;
+		}
+	},
+
+	modalParentConsent: function() {
+		$('.js-parent-easySale').off('change').on('change', function () {
+			if($(this).prop('checked'))
+				{
+				$('.js-child-easySale').prop('checked', true);
+				}
+		});
+
+		$('.js-parent-easyBuy').off('change').on('change', function () {
+			if($(this).prop('checked'))
+				{
+				$('.js-child-easyBuy').prop('checked', true);
+				}
+		});
+	},
+
+	bindChildConsents: function() {
+		$('input.easySaleSubOption, input.js-child-easySale').off('change').on('change', function () {
+			var easySaleSubOption = true;
+			var thisElement = $(this)[0];
+			if(thisElement.checked) {
+				$("label[for='"+thisElement.id+"']").removeClass('uk-text-muted');
+			}
+			else {
+				$("label[for='"+thisElement.id+"']").addClass('uk-text-muted');
+			}
+
+			var chlidrenClass = '.js-child-easySale';
+			if($('.easySaleSubOption').length) {
+				chlidrenClass = '.easySaleSubOption';
+			}
+
+			$(chlidrenClass).each((index, value) => {
+				if(value.checked) {
+					easySaleSubOption = false;
+				}
+			});
+			if (!easySaleSubOption && !$('input[id*="consents_easySale"]').prop('checked')) {
+				$('input[id*="consents_easySale"]').prop('checked', true)
+			}
+			else if(easySaleSubOption) {
+				$('input[id*="consents_easySale"]').prop('checked', false);
+			}
+		});
+		$('input.easyBuySubOption, input.js-child-easyBuy').off('change').on('change', function () {
+			var openedModal = '';
+			var thisElement = $(this)[0];
+			if($('.js-ad-details-page').length) {
+			    // workaround, on page multiple copies of same code
+				openedModal = '.uk-modal.uk-open ';
+			}
+
+			var easyBuySubOption = true;
+
+			if(thisElement.checked) {
+				$(openedModal+"label[for='"+thisElement.id+"']").removeClass('uk-text-muted');
+				$(openedModal+'#'+thisElement.id).prop('checked', thisElement.checked);
+			}
+			else {
+				$(openedModal+"label[for='"+thisElement.id+"']").addClass('uk-text-muted');
+				$(openedModal+'#'+thisElement.id).prop('checked', thisElement.checked);
+			}
+
+			var chlidrenClass = openedModal+'.js-child-easyBuy';
+			if($('.easySaleSubOption').length) {
+				chlidrenClass = openedModal+'.easyBuySubOption';
+			}
+
+			$(chlidrenClass).each((index, value) => {
+				if(value.checked) {
+					easyBuySubOption = false;
+				}
+			});
+			if(easyBuySubOption) {
+				$(openedModal+'input[id*="consents_easyBuy"]').prop('checked', false);
+			}
+			else if (!easyBuySubOption && !$(openedModal+'input[id*="consents_easyBuy"]').prop('checked')) {
+				$(openedModal+'input[id*="consents_easyBuy"]').prop('checked', true)
+			}
+		});
+	},
+
+	bindParentConsents: function() {
+		$('input[id*="consents_easySale"]').off('change').on('change', function () {
+			PA.consent.selectSubConsents('consents_easySale');
+		});
+		$('input[id*="consents_easyBuy"]').off('change').on('change', function () {
+			PA.consent.selectSubConsents('consents_easyBuy');
+		});
+	},
+
+	consentRevokeCheck: function(){
+		// EasySale Main + 2 subconsents
+		if(PA.consent.easySaleSelected === true && $('#consents_easySale:checked').length === 0) {
+			PA.consent.showDialog = true;
+	    }
+		if(PA.consent.easySaleCardPurchaseSelected === true && $('#consents_cardPurchase:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easySaleProfileSaleSelected === true && $('#consents_profileSale:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+
+		// EasyBuy Main + 7 subconsents
+		if(PA.consent.easyBuySelected === true && $('#consents_easyBuy:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easyBuyPurchaseAnnouncementSelected === true && $('#consents_purchaseAnnouncement:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easyBuyProfileBuySelected === true && $('#consents_profileBuy:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easyBuyPurchaseConfirmationSelected === true && $('#consents_purchaseConfirmation:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easyBuyInterestedInPurchaseSelected === true && $('#consents_interestedInPurchase:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easyBuyAdFollowSelected === true && $('#consents_adFollow:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easyBuyTestRideSelected === true && $('#consents_testRide:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.easyBuyPartsOnClickSelected === true && $('#consents_partsOnClick:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+
+		// 4 other consents
+		if(PA.consent.mailingListSelected === true && $('#consents_mailingList:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.imagesSelected === true && $('#consents_images:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.shareSelected === true && $('#consents_share:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+		if(PA.consent.viberSelected === true && $('#consents_viber:checked').length === 0) {
+			PA.consent.showDialog = true;
+		}
+
+	},
+
+	ajaxSubmit: function(dealerPage) {
+		var url = dealerPage ? '/profil-oglasivaca/podesavanja/consents' : '/korisnicki-profil/podesavanja/consents';
+		$("form.js-consent-form").submit(function(e){
+			var form = $(this);
+			PA.consent.consentRevokeCheck();
+			if(PA.consent.showDialog === true) {
+				UIkit.modal.confirm($('#removeConsent').html(), function () {
+					$.ajax({
+						type: "POST",
+						url: url,
+						data: form.serialize(),
+						success: function (data) {
+							PA.consent.showDialog = true;
+							var tempUrl = window.location.href;
+							if(tempUrl.search('reload') >= 1) {
+								window.location.replace(window.location.href);
+							}
+							else {
+								window.location.replace(window.location.href+'?reload');
+							}
+						},
+						error: function () {
+							// location.reload(true);
+						}
+					});
+
+				}, {
+					'labels': {
+						'Ok': 'U redu',
+						'Cancel': 'Zatvori'
+					}
+				});
+				e.preventDefault();
+				}
+			});
+		},
+
+
+	selectSubConsents: function(target)
+		{
+		var openedModal = '';
+		if($('.js-ad-details-page').length) {
+			// workaround, on page multiple copies of same code
+			openedModal = '.uk-modal.uk-open '
+		}
+
+		var easySaleSubOptions          = $(openedModal+'.easySaleSubOption');
+		var	childEasySale               = $(openedModal+'.js-child-easySale');
+		var easySaleSubOptionsLabels    = $(openedModal+'.easySaleSubOptionLabel');
+		var easyBuySubOptions           = $(openedModal+'.easyBuySubOption');
+		var	childEasyBuy                = $(openedModal+'.js-child-easyBuy');
+		var easyBuySubOptionsLabels     = $(openedModal+'.easyBuySubOptionLabel');
+		var parentConsentsEasySale      = $(openedModal+'input[id*="consents_easySale"]:checkbox:checked');
+		var parentConsentsEasyBuy       = $(openedModal+'input[id*="consents_easyBuy"]:checkbox:checked');
+		if(target == 'consents_easySale') {
+			if(parentConsentsEasySale.length > 0) {
+				easySaleSubOptions.prop('checked', true);
+				childEasySale.prop('checked', true);
+				easySaleSubOptionsLabels.removeClass('uk-text-muted');
+			}
+			else {
+				easySaleSubOptions.prop('checked', false);
+				childEasySale.prop('checked', false);
+				easySaleSubOptionsLabels.addClass('uk-text-muted');
+			}
+		}
+
+		if(target == 'consents_easyBuy') {
+			if(parentConsentsEasyBuy.length > 0) {
+				easyBuySubOptions.prop('checked', true);
+				childEasyBuy.prop('checked', true);
+				easyBuySubOptionsLabels.removeClass('uk-text-muted');
+			} else {
+				easyBuySubOptions.prop('checked', false);
+				childEasyBuy.prop('checked', false);
+				easyBuySubOptionsLabels.addClass('uk-text-muted');
+			}
+		}
+	},
+
+	showBuySubConsents: function () {
+		$('#easyBuySubConsents').addClass('uk-hidden');
+	},
+
+	hideBuySubConsents: function () {
+		$('#easyBuySubConsents').removeClass('uk-hidden');
+	},
+
+	showSaleSubConsents: function () {
+		$('#easySaleSubConsents').addClass('uk-hidden');
+	},
+
+	hideSaleSubConsents: function () {
+		$('#easySaleSubConsents').addClass('uk-hidden');
+	}
+
+};

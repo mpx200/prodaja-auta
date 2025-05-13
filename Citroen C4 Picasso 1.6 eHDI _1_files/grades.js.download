@@ -1,0 +1,323 @@
+var PA = PA || {};
+
+PA.grades = {
+    gradeSpeedAnswer: 0,
+    gradeCommunication: 0,
+    gradeOverall: 0,
+    gradeAdInfo: 0,
+    gradePurchased: false,
+    pleasantContact: false,
+    gradeInteractions: [],
+
+    initDealerEvaluate: function(){
+        $('.js-rate-answer-speed, .js-rate-communication, .js-rate-overall, .js-rate-ad-info').each(function(){
+            var data = $(this).data();
+            PA.grades.gradeOverall = data['score'];
+        });
+
+        $('.js-rate-answer-speed, .js-rate-communication, .js-rate-overall, .js-rate-ad-info').raty({
+            score: function() {
+                return $(this).attr('data-score');
+            },
+            noRatedMsg: 'Niste uneli ocenu',
+            halfShow: true,
+            path: '/bundles/infostudauto/images/raty-flat',
+            starHalf: 'half-star.svg',
+            starOff: 'empty-star.svg',
+            starOn: 'full-star.svg',
+            hints: ["Oceni sa 1", "Oceni sa 2", "Oceni sa 3", "Oceni sa 4", "Oceni sa 5"],
+            click: function(score,event) {
+                PA.grades.gradeOverall = score;
+            }
+        });
+
+        $('#inaccurate_description').on('change', () => {
+            if($('#inaccurate_description:checked').length) {
+                $('.comment-wrapper .comment-inaccurate').removeClass('uk-hidden');
+            }
+        });
+        $('#accurate_description').on('change', () => {
+            if($('#accurate_description:checked').length) {
+                $('.comment-wrapper .comment-inaccurate').addClass('uk-hidden');
+            }
+        });
+    },
+
+    submitGrade: function(userId) {
+        $('#grade-btn').on('click', function() {
+            if ($('#purchased_true:checked, #purchased_false:checked').length == 0)
+                {
+                UIkit.modal.alert('Morate odabrati da li ste kupovali od ovog prodavca.', {
+                    labels: {
+                        'Ok': 'U redu'
+                    }
+                });
+                return false;
+                }
+            else
+                {
+                PA.grades.gradePurchased = $('#purchased_true:checked').length;
+                }
+
+            PA.grades.gradeInteractions = [];
+            $('.js-rate-interaction:checked').each(function(){
+                PA.grades.gradeInteractions.push($(this).val());
+            });
+
+            if (PA.grades.gradeInteractions.length == 0 &&
+                $('input[name="purchased"]:checked').val() == 1) {
+                UIkit.modal.alert('Morate odabrati bar jednu vrstu komunikacije.', {
+                    labels: {
+                        'Ok' : 'U redu'
+                    }
+                });
+                return false;
+            }
+
+            if ($('#pleasant_contact:checked, #bad_contact:checked').length == 0)
+                {
+                UIkit.modal.alert('Morate odabrati da li ste imali korektnu komunikaciju sa prodavcem.', {
+                    labels: {
+                        'Ok': 'U redu'
+                    }
+                });
+                return false;
+                }
+            else
+                {
+                PA.grades.pleasantContact = $('#pleasant_contact:checked').length;
+                }
+
+            if ( PA.grades.gradeOverall == 0) {
+                UIkit.modal.alert('Morate uneti ocenu za opšti utisak saradnje sa ovim prodavcem.', {
+                    labels: {
+                        'Ok' : 'U redu'
+                    }
+                });
+                return false;
+            }
+
+            var firstName = $('.js-firstName').val();
+            var lastName = $('.js-lastName').val();
+            var comment = $('#comment').val();
+            var termsAndConditions = $('#termsAndConditions').prop('checked');
+            if($('#accurate_description:checked').length) {
+                PA.grades.accurateDescription = 1;
+            }
+            if($('#inaccurate_description:checked').length) {
+                PA.grades.accurateDescription = 0;
+            }
+
+            if (firstName === '') {
+                UIkit.modal.alert('Polje ime je obavezno.', {
+                    labels: {
+                        'Ok' : 'U redu'
+                    }
+                });
+                return false;
+            }
+
+            if (lastName === '') {
+                UIkit.modal.alert('Polje prezime je obavezno.', {
+                    labels: {
+                        'Ok' : 'U redu'
+                    }
+                });
+                return false;
+            }
+
+            if(termsAndConditions == false){
+                UIkit.modal.alert('Neophodno je da prihvatiš uslove postavljanja komentara, ocena i drugih sadržaja.', {
+                    labels: {
+                        'Ok' : 'U redu'
+                    }
+                });
+
+                return false;
+            }
+
+            var data = {
+                purchased: PA.grades.gradePurchased,
+                interactions: PA.grades.gradeInteractions,
+                pleasantContact: PA.grades.pleasantContact,
+                overall: PA.grades.gradeOverall,
+                comment: comment,
+                grader: {
+                    firstName: firstName,
+                    lastName: lastName,
+                },
+                termsAndConditions: termsAndConditions
+            }
+
+            if(PA.grades.hasOwnProperty('accurateDescription')) {
+                data.accurateDescription = PA.grades.accurateDescription;
+            }
+
+            data = JSON.stringify(data);
+            PA.common.loaderStart();
+
+            $.post('/grade/' + userId, data, function(response) {
+                PA.common.loaderStop();
+                if (response.success == true){
+                    $('#firstName').prop('disabled', true);
+                    $('#lastName').prop('disabled', true);
+                    $.removeCookie('grade-request-page', { path: '/'});
+                    UIkit.modal('.js-grade-thank-you').show();
+                } else {
+                    UIkit.modal.alert(response.message, {
+                        labels: {
+                            'Ok' : 'U redu'
+                        }
+                    });
+                }
+            });
+        });
+    },
+
+    reloadDealerGrades: function () {
+        $('.js-refresh-grade').on('click', function () {
+            window.location = window.location.pathname + '?evaluate=1';
+        });
+    },
+
+    showRemainingGrades: function (userId) {
+        $('.loadAllGrades').on('click', function () {
+            PA.common.loaderStart();
+            $.get('/remaining-grades/' + userId, function (data) {
+                $('.loadAllGrades').remove();
+                $('.remainingGrades').append(data);
+                PA.common.loaderStop();
+            });
+        });
+    },
+
+    showGradeForm: function () {
+        $('.showEvaluate').on('click', function () {
+            $.ajax({
+                type: 'POST',
+                url: '/request-page-memcache-key',
+                async: false,
+                data: {
+                    requestPage: 'sellersPage'
+                },
+            }).done(function (data) {
+                if (data.success) {
+                    $('.evaluate').removeClass('uk-hidden');
+                    $('.showEvaluate').remove();
+                    $('.js-grade-width').removeClass('uk-width-medium-7-10 uk-width-1-2');
+                    $('.js-grade-width').addClass('uk-width-1-1');
+                    if($('.no-grades')) {
+                        $('.no-grades').remove();
+                    }
+                } else {
+                    window.location = '/login?target_path=' + window.location.pathname + '?evaluate=1';
+                }
+            });
+        });
+    },
+
+    leadToGradeForm: function () {
+        $('.leadToGradeForm').on('click', function (e) {
+            PA.common.dataLayerEvent('oceni_prodavca');
+            e.preventDefault();
+            var advertiserId = $(this).data('advertiser-id');
+            var urlAlias = $(this).data('url-alias');
+            var requestPage = $(this).data('request-page');
+
+            $.ajax({
+                type: 'POST',
+                url: '/request-page-memcache-key',
+                async: false,
+                data: {
+                    advertiserId: advertiserId,
+                    urlAlias: urlAlias,
+                    requestPage: requestPage
+                },
+            }).done(function (data) {
+                window.open(data.path, '_blank');
+            });
+        });
+    },
+
+    rateGrade: function(){
+        $('.js-usefulGrade').on('click', function(){
+            var data = $(this).data();
+            var gradeId = data['id'];
+            var pathname = window.location.pathname;
+
+            if($.cookie('likedGrade'))
+                {
+                var cookieArray = $.cookie('likedGrade').split(",");
+                }
+
+            // if cookie doesn't exist like grade anyway OR if it exists, check if already liked that button
+            if(!$.cookie('likedGrade') || cookieArray.indexOf(gradeId.toString()) == -1)
+                {
+                $.post('/grade/like/' + gradeId, function(response){
+                    if (response.success == true){
+                    $('.js-likes-number[data-id='+gradeId+']').html(response.likes);
+                    $('.js-usefulGrade[data-id='+gradeId+']').off('click');
+                    }
+
+                    if(!$.cookie('likedGrade'))
+                        {
+                        $.cookie('likedGrade', gradeId, { path: pathname, expires: 365*100 });
+                        }
+                    else
+                        {
+                        $.cookie('likedGrade',  $.cookie('likedGrade') + decodeURIComponent(',') + gradeId, { path: pathname, expires: 365*100 });
+                        }
+                });
+                }
+        });
+    },
+
+    hideNoGradesIfEvaluateIsVisible: function () {
+        if($('.evaluate').is(":visible")) {
+            $('.no-grades').remove();
+        }
+    },
+
+    toggleInteractionOptions: function () {
+
+        $('input[type=radio][name=purchased]').change(function() {
+            PA.grades.slideDownInteractions();
+        });
+    },
+
+    slideDownInteractions: function () {
+
+        if ($('.js-additionsQuestions').is(':hidden') &&
+            typeof $('input[name="purchased"]:checked').val() !== 'undefined'){
+            $('.js-additionsQuestions').slideDown();
+        }
+    },
+
+    stickyAverage: function () {
+        $(document).on('scroll', () => {
+            if($('.stickyAverage:visible').length) {
+                var stickyElm = $('.stickyAverage');
+
+                var boundingClient = stickyElm[0].getBoundingClientRect();
+                stickyElm.removeClass('stickyBox');
+                stickyElm.removeAttr('style');
+
+                if(boundingClient.top < 7) {
+                    stickyElm.addClass('stickyBox');
+                    var parentElm = $('.grades-content-bottom');
+
+                    var parentWidth = parentElm.outerWidth();
+                    var parentPaddingLeft = parentElm.css('padding-left');
+                    var parentPaddingRight = parentElm.css('padding-right');
+
+                    stickyElm.css({
+                        'width': parentWidth,
+                        'margin-left': '-'+parentPaddingLeft,
+                        'padding-left': parentPaddingLeft,
+                        'padding-right': parentPaddingRight
+                    });
+                }
+            }
+        });
+    }
+};

@@ -1,0 +1,1243 @@
+var PA = PA || {};
+
+PA.profile = {
+
+	totalCreditSuggestionValue: 0,
+
+    settingsAjax: function(){
+        $('.js-profile-settings form').on('submit', function(){
+            PA.common.loaderStart();
+
+            $.ajax({
+                type: "POST",
+                url: '/korisnicki-profil/podesavanja-ajax',
+                data: $(this).serialize(),
+                success: function(data) {
+                    $('.js-profile-settings').html(data);
+                    PA.common.removeAlert();
+                    PA.common.loaderStop();
+                }
+            });
+
+            return false;
+        });
+    },
+
+    imageSortingCheck: function() {
+	    $('.imageSorting').on('change', function() {
+            var checked = $(this).is(":checked") ? '1' : '0';
+            $.get('/user/images/allowUserImageSorting/' + checked);
+        });
+    },
+
+    /**
+     * @param {Number} creditAmount
+     * @param loadOrders
+     */
+    initCreditOrder: function (creditAmount, loadOrders) {
+        $.ajax({
+            type: "GET",
+            url: "/credit/alreadyOrderedCredit"
+        }).done(function(data){
+            if(data.alreadyOrderedCredit){
+                PA.common.loaderStart();
+                PA.credit.order(creditAmount, function(){
+                    if (loadOrders)
+                        {
+                        $('#creditOrdersList').load('/korisnicki-profil/list-orders');
+                        }
+                    PA.common.loaderStop();
+                });
+            } else {
+                PA.profile.updateUserData(creditAmount, loadOrders);
+            }
+        });
+    },
+
+    creditOrderUpsales: function (creditAmount, upsalesOffer, creditDiscount, upsalesPrice, upsalesDiscount, creditStatus) {
+        if (creditAmount >= upsalesOffer)
+        {
+            return PA.profile.initCreditOrder(creditAmount, 1);
+        }
+
+        var dialog = UIkit.modal.dialog($('.js-credit-upsales-holder-' + creditAmount).html());
+        dialog.show();
+
+        $('.js-credit-upsales-old').on('click', function(){
+            dialog.hide();
+            PA.profile.initCreditOrder(creditAmount, 1);
+            dataLayer.push({'event': 'upsales', 'clicked_amount': creditAmount, 'upsale_amount': upsalesOffer, 'action': 'Neuspešan upsale'});
+        });
+
+        $('.js-credit-upsales-new').on('click', function(){
+            console.log(creditAmount, creditDiscount, upsalesOffer, upsalesPrice, upsalesDiscount);
+            let dataLayerObject = {
+                currency: "RSD",
+                item_id: upsalesOffer,
+                item_name: "Kredit upsale" + upsalesOffer,
+                discount: upsalesDiscount + .00,
+                index: 2,
+                item_list_id: "upsale",
+                item_list_name: creditStatus,
+                price: upsalesPrice + .00,
+                quantity: 1
+            };
+            let dataLayerJSON = JSON.stringify(dataLayerObject);
+            localStorage.setItem("dataLayer", dataLayerJSON);
+            dialog.hide();
+            PA.profile.initCreditOrder(upsalesOffer, 1);
+            dataLayer.push({'event': 'upsales', 'clicked_amount': creditAmount, 'upsale_amount': upsalesOffer, 'action': 'Uspešan upsale'});
+        });
+    },
+
+    updateUserData: function(creditAmount, loadOrders) {
+        var dialog = $('#first-credit-order').html();
+        UIkit.modal.confirm(dialog, function(){
+            PA.common.loaderStart();
+            $.post('/korisnicki-profil/updateUserData', $("form[id=user-credit-form]").serialize(), function(response){
+                if (response.success)
+                    {
+                    PA.credit.order(creditAmount, function () {
+                        if (loadOrders)
+                            {
+                            $('#creditOrdersList').load('/korisnicki-profil/list-orders');
+                            }
+
+                        PA.common.loaderStop();
+                        });
+                    $('#form-warning').addClass('uk-hidden');
+                    }
+                else
+                    {
+                    PA.common.loaderStop();
+                    UIkit.modal.alert(response.message);
+                    }
+            });
+        }, {
+            labels: {
+                'Ok' : 'U redu',
+                'Cancel' : 'Zatvori'
+            }
+        });
+    },
+
+    /**
+     * @param {Number} orderId
+     */
+    creditCancelOrder: function(orderId){
+        PA.credit.cancelOrder(orderId, function(){
+            $('#creditOrdersList').load('/korisnicki-profil/list-orders');
+        });
+    },
+
+    reloadActiveAds: function(){
+        PA.common.loaderStart();
+        $('#js-profile-active-ads').load('/korisnicki-profil/lista-aktivnih-oglasa', function(){
+            PA.common.loaderStop();
+        });
+    },
+
+    reloadInactiveAds: function(){
+        PA.common.loaderStart();
+        $('#js-profile-inactive-ads').load('/korisnicki-profil/lista-inaktivnih-oglasa', function(){
+            PA.common.loaderStop();
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     * @param requestPage
+     */
+    bindFeatureSearch: function(csrf_token, requestPage){
+        $('.js-featuredSearch').on('click', function(){
+            PA.common.dataLayerEvent('js-featuredSearch');
+            var classified = $(this).data();
+
+            // this is hack so we know that feature is coming from feature modal
+            // adding it to data param of feature search since i'm simulating click on it
+            // removing it afterwards
+            if (classified['requestpage'] == 'ads-active-feature-suggestion'){
+                var requestPagePass = 'ads-active-feature-suggestion';
+            } else {
+                requestPagePass = requestPage;
+            }
+
+            if(classified['category'] == '26'){
+                dataLayer.push({'event': 'featuring_init', 'featuring_type': 'search', 'request_page': requestPage, 'ad_id': classified['id']});
+            }
+            PA.tools.classifiedFeatureSearch(classified['id'], requestPagePass, function(){
+                PA.profile.reloadActiveAds();
+                $(this).data('request-page', '');
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     * @param {String} requestPage
+     */
+    bindFeatureHome: function(csrf_token, requestPage){
+        $('.js-featuredHome').on('click', function(){
+            var classified = $(this).data();
+
+            if(classified['category'] == '26'){
+                dataLayer.push({'event': 'featuring_init', 'featuring_type': 'home', 'request_page': requestPage, 'ad_id': classified['id']});
+            }
+            PA.tools.classifiedFeatureHome(classified['id'], requestPage, csrf_token, function(){
+                PA.profile.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindFeatureXL: function(csrf_token, requestPage){
+        $('.js-featuredXL').on('click', function(){
+            var classified = $(this).data();
+
+            if(classified['category'] == '26'){
+                dataLayer.push({'event': 'featuring_init', 'featuring_type': 'xl', 'request_page': requestPage, 'ad_id': classified['id']});
+            }
+            PA.tools.classifiedFeatureXL(classified['id'], requestPage, csrf_token, function(){
+                PA.profile.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     * @param requestPage
+     */
+    bindFeatureTopSearch: function(csrf_token, requestPage){
+        $('.js-featuredTopSearch').on('click', function(){
+            var classified = $(this).data();
+
+            if(classified['category'] == '26')
+                {
+                dataLayer.push({'event': 'featuring_init', 'featuring_type': 'topSearch', 'request_page': requestPage, 'ad_id': classified['id']});
+                }
+            PA.tools.classifiedFeatureTopSearch(classified['id'], requestPage, csrf_token, function(){
+                PA.profile.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     *
+     * @param csrf_token
+     */
+    bindActivateTopSearchAutoFeature: function (csrf_token){
+        $('.js-activateTopSearchAutoFeature').on('click', function(){
+            var classifiedId = $(this).data();
+
+            PA.tools.activateTopSearchAutoFeature(classifiedId, csrf_token, function(){
+                this.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindDeactivateTopSearchAutoFeature: function(csrf_token){
+        $('.js-deactivateTopSearchAutoFeature').on('click', function(){
+            var classifiedId = $(this).data();
+
+            PA.tools.deactivateTopSearchAutoFeature(classifiedId, csrf_token, function(){
+                this.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindUnPublish: function(csrf_token){
+        $('.js-unPublish').on('click', function(){
+            var classified = $(this).data();
+
+            PA.tools.classifiedUnPublish(classified['id'], csrf_token, function(){
+                PA.profile.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindPriceReduction: function(csrf_token){
+        $('.js-salePriceAction').on('click', function(){
+            var classified = $(this).data();
+            PA.tools.classifiedUpdateSalePriceStatus(classified['id'], classified['status'], csrf_token, function(){
+                PA.profile.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindPublish: function(csrf_token){
+        $('.js-publish').on('click', function(){
+            var classified = $(this).data();
+
+            PA.tools.classifiedPublish(classified['id'], csrf_token, function(){
+                PA.profile.reloadInactiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     * @param userId
+     */
+    bindDeleteAd: function(csrf_token, userId = 0){
+        $('.js-deleteAd').on('click', function(){
+            var classified = $(this).data();
+
+            PA.tools.classifiedDelete(classified['id'], classified['status'], csrf_token, function(show_delete_survey){
+                if(classified['status'] == 'active'){
+                    PA.profile.reloadActiveAds();
+                } else {
+                    PA.profile.reloadInactiveAds();
+                }
+                PA.tools.showXLPoll(classified['id']);
+
+                if(show_delete_survey){
+                    PA.tools.classifiedDeleteSurvey(classified['id'], csrf_token, function(show_satisfaction_survey){
+                        if (show_satisfaction_survey){
+                            PA.tools.classifiedSatisfactionSurvey(classified['id'], userId, csrf_token, function(){});
+                        }
+                    });
+                }
+            });
+
+            return false;
+        });
+    },
+
+    bindSoldAd: function(csrf_token){
+        $('.js-soldAd').on('click', function(){
+           var classified = $(this).data();
+
+            PA.tools.classifiedSold(classified['id'], classified['status'], csrf_token, function(){
+                if(classified['status'] == 'active'){
+                    PA.profile.reloadActiveAds();
+                } else {
+                    PA.profile.reloadInactiveAds();
+                }
+
+                PA.tools.classifiedSoldSurvey(classified['id'], csrf_token);
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindRenewActive: function(csrf_token){
+        $('.js-renew').on('click', function(){
+            var classifiedId = $(this).data('id');
+
+            PA.tools.classifiedRenewActive(classifiedId, csrf_token, function(){
+                PA.profile.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindPaymentInstructions: function(csrf_token){
+        $('.js-paymentInstructions').on('click', function(){
+            var classified = $(this).data();
+
+            PA.common.loaderStart();
+            $.ajax({
+                type: "PUT",
+                url: "/classified/" + classified['id'] + "/paymentInstructions/inactive"
+            }).done(function(data){
+                PA.common.loaderStop();
+                var modal = UIkit.modal.dialog(data, {
+                    'labels' : {
+                        'Ok': 'U redu'
+                    }
+                });
+	            $('.uk-modal-dialog').addClass('uk-modal-dialog-large');
+                modal.show();
+                $('.paymentTab').on('click', function(){
+                    $(this).addClass('paymentSelected').siblings().removeClass('paymentSelected');
+                    var d = $(this).data();
+                    var payment_type = d['payment_type'];
+                    $('.'+payment_type+'Container').last().show().siblings().hide();
+                });
+
+                $('.payByCredit').on('click', function(){
+                	var d = $(this).data();
+                    var pricePlan = d['priceplan'];
+                    var classifiedId = d['classifiedid'];
+                    var csrf_token = d['csrftoken'];
+                    modal.hide();
+
+                    if (pricePlan == 'imported'){
+                        PA.common.loaderStart();
+                        var page = d['page'];
+                        $.ajax({
+                            type: "PUT",
+                            url: "/classified/" + classifiedId + "/paybycredit",
+                            data: { csrf_token: csrf_token, imported: true, requested_page: page }
+                        }).done(function(data){
+                            PA.profile.reloadInactiveAds();
+                            $(".js-modal-confirm-cancel").trigger('click');
+
+                            UIkit.modal.alert(data.message,  {
+                                'labels' : {
+                                    'Ok' : 'U redu'
+                                }
+                            });
+                            PA.common.loaderStop();
+                        });
+                    } else if (pricePlan == 'extended') {
+                        PA.common.loaderStart();
+                        $.ajax({
+                            type: "PUT",
+                            url: "/classified/" + classifiedId + "/paybycredit",
+                            data: { csrf_token: csrf_token, extended: true }
+                        }).done(function(data){
+                            PA.profile.reloadInactiveAds();
+                            $(".js-modal-confirm-cancel").trigger('click');
+
+                            UIkit.modal.alert(data.message, {
+                                'labels' : {
+                                    'Ok' : 'U redu'
+                                }
+                            });
+                            PA.common.loaderStop();
+                        });
+                    } else if (pricePlan == 'paid_renew') {
+                        PA.common.loaderStart();
+                        $.ajax({
+                            type: "PUT",
+                            url: "/classified/" + classifiedId + "/paybycredit",
+                            data: { csrf_token: csrf_token, paid_renew: true }
+                        }).done(function(data){
+                            PA.profile.reloadInactiveAds();
+                            $(".js-modal-confirm-cancel").trigger('click');
+
+                            UIkit.modal.alert(data.message, {
+                                'labels' : {
+                                    'Ok' : 'U redu'
+                                }
+                            });
+                            PA.common.loaderStop();
+                        });
+                    } else {
+                        PA.common.loaderStart();
+                        $.ajax({
+                            type: "PUT",
+                            url: "/classified/"+classifiedId+"/feature/search/inactive",
+                            data: { duration: d['duration'] }
+                        }).done(function(data){
+                            PA.profile.reloadInactiveAds();
+                            $(".js-modal-confirm-cancel").trigger('click');
+
+                            UIkit.modal.alert(data.message, {
+                                'labels' : {
+                                    'Ok' : 'U redu'
+                                }
+                            });
+                            PA.common.loaderStop();
+                        });
+                    }
+                });
+
+                $('.js-close-instructions').on('click', function(){
+                   modal.hide();
+                });
+            });
+
+            return false;
+        });
+    },
+
+    showPaymentInstructionsActive: function(classifiedId) {
+        PA.common.loaderStart();
+        $.ajax({
+            type: "PUT",
+            url: "/classified/" + classifiedId + "/paymentInstructions/active"
+        }).done(function(data){
+            PA.common.loaderStop();
+            var modal = UIkit.modal.dialog(data, {
+                'labels' : {
+                    'Ok': 'U redu'
+                }
+            });
+            modal.show();
+            $('.paymentTab').on('click', function(){
+                $(this).addClass('paymentSelected').siblings().removeClass('paymentSelected');
+                var d = $(this).data();
+                var payment_type = d['payment_type'];
+                $('.'+payment_type+'Container').last().show().siblings().hide();
+            });
+
+            $('.payByCredit').on('click', function(){
+                var d = $(this).data();
+                var pricePlan = d['priceplan'];
+                var classifiedId = d['classifiedid'];
+                var csrf_token = d['csrftoken'];
+                modal.hide();
+
+                if (pricePlan == 'imported'){
+                    PA.common.loaderStart();
+                    var page = d['page'];
+                    $.ajax({
+                        type: "PUT",
+                        url: "/classified/" + classifiedId + "/paybycredit",
+                        data: { csrf_token: csrf_token, imported: true, page: 'ads-active' }
+                    }).done(function(data){
+                        PA.profile.reloadActiveAds();
+                        $(".js-modal-confirm-cancel").trigger('click');
+
+                        UIkit.modal.alert(data.message,  {
+                            'labels' : {
+                                'Ok' : 'U redu'
+                            }
+                        });
+                        PA.common.loaderStop();
+                    });
+
+                } else if (pricePlan == 'extended') {
+                    PA.common.loaderStart();
+                    $.ajax({
+                        type: "PUT",
+                        url: "/classified/" + classifiedId + "/paybycredit",
+                        data: { csrf_token: csrf_token, extended: true }
+                    }).done(function(data){
+                        PA.profile.reloadActiveAds();
+                        $(".js-modal-confirm-cancel").trigger('click');
+
+                        UIkit.modal.alert(data.message, {
+                            'labels' : {
+                                'Ok' : 'U redu'
+                            }
+                        });
+                        PA.common.loaderStop();
+                    });
+                } else {
+                    PA.common.loaderStart();
+                    $.ajax({
+                        type: "PUT",
+                        url: "/classified/"+classifiedId+"/feature/search/inactive",
+                        data: { duration: d['duration'] }
+                    }).done(function(data){
+                        PA.profile.reloadActiveAds();
+                        $(".js-modal-confirm-cancel").trigger('click');
+
+                        UIkit.modal.alert(data.message, {
+                            'labels' : {
+                                'Ok' : 'U redu'
+                            }
+                        });
+                        PA.common.loaderStop();
+                    });
+                }
+            });
+
+            $('.js-close-instructions').on('click', function(){
+                modal.hide();
+            });
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindPaymentInstructionsActive: function(csrf_token){
+        $('.js-paymentInstructions').on('click', function(){
+            this.showPaymentInstructionsActive($(this).data('id'));
+            return false;
+        });
+    },
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindRenewInactive: function(csrf_token){
+        $('.js-renew').on('click', function(){
+            var classifiedId = $(this).data('id');
+
+            PA.tools.classifiedRenewInactive(classifiedId, csrf_token, function(){
+                PA.profile.reloadInactiveAds();
+            });
+
+            return false;
+        });
+    },
+
+	bindFacebookShare: function(){
+		$('.js-facebook').on('click', function(){
+			var classified = $(this).data();
+
+			FB.ui({
+				"method": "feed",
+				"link": 'https://www.polovniautomobili.com' + classified['link'],
+				"picture": classified['picture'],
+				"name": classified['name'],
+				"description": classified['description']
+			});
+		});
+	},
+
+    loadMoreBuyers: function(){
+        $('.js-load-more').on('click', function(){
+            PA.common.loaderStart();
+
+            var holder = $('.buyer-data');
+            var skip = $('tr', holder).length;
+            var offer = $(this).data('offer');
+
+            $.get('/potential-buyers/list/' + offer, { skip : skip }, function(data){
+                if (data.length > 0){
+                    holder.append(data);
+                    PA.profile.sendOffer();
+	                PA.profile.showInterestedBuyerPhone()
+                } else {
+                    $('.js-load-more').hide();
+                    holder.after('<div class="uk-margin-top uk-text-bold uk-width-1-1 uk-text-muted">Nema više rezultata.</div>');
+                }
+
+                PA.common.loaderStop();
+            });
+        });
+    },
+
+    sendOffer: function() {
+        $('.js-send-offer').unbind('click').on('click', function (){
+            PA.common.dataLayerEvent('posalji_ponudu');
+            var data = $(this).data();
+            var classifiedId = data['classifiedid'];
+            var userId = data['userid'];
+
+            UIkit.modal.confirm($('.js-inbox-offer').html(), function(){
+                var text = $('.uk-modal-dialog #js-inbox-offer-message').val();
+
+                PA.common.loaderStart();
+                $.post('/potential-buyers/send-offer', {
+                    userId : userId,
+                    classifiedId : classifiedId,
+                    text : text,
+					add_classified_data: $('.uk-modal-dialog #add_classified_data').is(':checked')
+                }, function(response){
+					PA.common.loaderStop();
+					if (response.success)
+						{
+						$('[data-classifiedid="' + classifiedId + '"][data-userid="'+userId+'"]')
+							.replaceWith('<a href="/korisnicki-profil/poruke?thread='+response.threadId+'" class="paGrayButtonSecundary nowrap">Ponuda poslata</a>');
+						}
+					else
+						{
+						UIkit.modal.alert(response.message, {
+                            labels: {
+                                'Ok': 'OK'
+                            }
+                        });
+						}
+                });
+            }, {
+                labels: {
+                    'Ok': 'Pošalji ponudu <i class="uk-icon-send"></i>',
+                    'Cancel': 'Zatvori'
+                }
+            });
+
+            PA.templates.bindTools();
+            PA.templates.selectedTemplate();
+	        $('.uk-modal-dialog').addClass('uk-modal-dialog-large');
+        });
+    },
+
+    showInterestedBuyerPhone: function(){
+        $('.show_buyer_phone').unbind('click').on('click', function(){
+            PA.common.dataLayerEvent('show_buyer_phone');
+            ga('send', 'event', 'Korisnicki profil', 'click', 'Potencijalni kupci - klik na broj telefona');
+            $(this).addClass('uk-hidden');
+	        $(this).siblings('span.buyer_phone').removeClass('uk-hidden');
+        });
+    },
+
+    bindDialogNotification: function(not_id){
+        var dialogHTML = $('#dialog-overlay');
+        var dialog = UIkit.modal.dialog(dialogHTML.html());
+        dialog.show();
+        PA.notifications.markRead(not_id, 'default');
+    },
+
+    purchased: function(){
+        $('.js-purchased').on('click', function(event){
+           var data = $(this).data();
+
+           $.get('/user/nameData?classifiedId='+data['classifiedid'], function(response){
+               html = response.html;
+	           var modal = UIkit.modal.dialog(html);
+	           modal.show();
+	           event.preventDefault();
+
+	           $('.js-submit_data_dialog').on('click', function() {
+	               PA.common.loaderStart();
+	               modal.hide();
+	                $.post('/korisnicki-profil/purchase/'+data['classifiedid'], $('.update-name-form').serialize(), function(response){
+	                    PA.common.loaderStop();
+	                if (response.success === true){
+	                    if (typeof data['urlAlias'] !== 'undefined') {
+                            window.location.href = '/korisnicki-profil/moja-vozila?added=true&urlAlias=' + data['urlAlias'];
+                        } else if (typeof data['advertiser'] !== 'undefined') {
+                            window.location.href = '/korisnicki-profil/moja-vozila?added=true&advertiser=' + data['advertiser'];
+                        } else {
+                            window.location.href = '/korisnicki-profil/moja-vozila?added=true';
+                        }
+	                } else {
+	                    if(response.message != 'undefined' && response.message != undefined) {
+	                        UIkit.modal.alert("<b>Greška</b> <br><br> " + response.message, {
+		                        'labels' : {
+			                        'Ok' : 'U redu'
+		                        }
+	                        });
+	                    } else {
+	                        UIkit.modal.alert('Doslo je do greške, pokušajte kasnije.', {
+		                        'labels' : {
+			                        'Ok' : 'U redu'
+		                        }
+	                        });
+	                    }
+	                }
+	                });
+	           });
+
+	           $('.js-close_data_dialog').on('click', function(){
+	           modal.hide();
+	           });
+            });
+        });
+    },
+
+    deletePurchase: function(){
+        $('.js-delete-purchase').on('click', function(){
+            var data = $(this).data();
+
+            UIkit.modal.confirm('Da li ste sigurni da želite obrisati vozilo?', function(){
+                PA.common.loaderStart();
+                $.ajax('/korisnicki-profil/purchase/'+data['purchaseid'], {
+                    type: "DELETE",
+                    success: function(data){
+                        PA.common.loaderStop();
+                        if (data.success == true){
+                            var modal = UIkit.modal.alert('Uspešno ste obrisali vozilo.');
+                            modal.on('hide.uk.modal', function(){
+                               window.location = window.location.href.split("?")[0];
+                            });
+                        } else {
+                            UIkit.modal.alert('Došlo je do greške, pokušajte ponovo.');
+                        }
+                    }
+                });
+            }, {
+                'labels' : {
+                    'Ok' : 'U redu',
+                    'Cancel' : 'Zatvori'
+                }
+            });
+        });
+    },
+
+	deletePotentialPurchases: function(){
+		$('.js-delete-potential-purchases').on('click', function(){
+			var userId = $(this).data('userid');
+
+			UIkit.modal.confirm('Da li ste sigurni da želite obrisati sve vaše potencijalne kupovine?', function(){
+				PA.common.loaderStart();
+				$.ajax('/profile/purchase/multiple/' + userId, {
+					type: "DELETE",
+					success: function(data){
+						PA.common.loaderStop();
+						if (data.success == true){
+							var modal = UIkit.modal.alert('Uspešno ste obrisali vaše potencijalne kupovine.');
+							modal.on('hide.uk.modal', function(){
+								window.location = window.location.href.split("?")[0];
+							});
+						} else {
+							UIkit.modal.alert('Došlo je do greške, pokušajte ponovo.');
+						}
+					}
+				});
+			}, {
+				'labels' : {
+					'Ok' : 'U redu',
+					'Cancel' : 'Zatvori'
+				}
+			});
+		});
+	},
+
+	buttonCalculator: function (carCount) {
+		if (PA.profile.totalCreditSuggestionValue * carCount >= 0 && PA.profile.totalCreditSuggestionValue * carCount <= 5) {
+			$('.creditButtonSugest a').removeClass('uk-button-success');
+			$('#creditSmall').addClass('uk-button-success');
+		} else if (PA.profile.totalCreditSuggestionValue * carCount > 5 && PA.profile.totalCreditSuggestionValue * carCount <= 10) {
+			$('.creditButtonSugest a').removeClass('uk-button-success');
+			$('#creditMiddle').addClass('uk-button-success');
+		} else if (PA.profile.totalCreditSuggestionValue * carCount > 10 && PA.profile.totalCreditSuggestionValue * carCount <= 20) {
+			$('.creditButtonSugest a').removeClass('uk-button-success');
+			$('#creditLarge').addClass('uk-button-success');
+		} else if (PA.profile.totalCreditSuggestionValue * carCount > 20 ) {
+			$('.creditButtonSugest a').removeClass('uk-button-success');
+			$('#creditXLarge').addClass('uk-button-success');
+		};
+	},
+
+	creditCalculatorSuggestion: function () {
+
+		$('input#creditCarCount').on('input', function () {
+			$('.creditsNeeded').text(PA.profile.totalCreditSuggestionValue * $(this).val());
+			$('.creditsNeededRsd').text(PA.profile.totalCreditSuggestionValue * 300 * $(this).val());
+			var carCount = $('input#creditCarCount').val();
+			PA.profile.buttonCalculator(carCount);
+		});
+
+		if(PA.profile.totalCreditSuggestionValue == 0) {
+			$('.creditButtonSugest span').removeClass('uk-button-success');
+			$('#creditSmall').addClass('uk-button-success');
+		};
+
+		$('#istaknutUpretrazi, #istaknutNaNslovnoj, #xlOglas').on('click', function () {
+			var carCount = $('input#creditCarCount').val();
+			var creditValue = $(this).attr("data-kredit");
+			$(this).toggleClass('uk-button-primary');
+			if($(this).hasClass('uk-button-primary')) {
+				PA.profile.totalCreditSuggestionValue -= parseFloat(creditValue);
+				$(this).html('Želim ovu uslugu <i class="uk-icon-check"></i>');
+			} else {
+				PA.profile.totalCreditSuggestionValue += parseFloat(creditValue);
+				$(this).html('Ipak ne želim ovu uslugu <i class="uk-icon-times-circle"></i>');
+			};
+			$('.creditsNeeded').text(PA.profile.totalCreditSuggestionValue * carCount);
+			$('.creditsNeededRsd').text(PA.profile.totalCreditSuggestionValue * 300 * carCount);
+			PA.profile.buttonCalculator(carCount);
+		});
+	},
+
+	/**
+	 * Temporary buttons for a modal accepting that we can send user information to 3rd party members /c/eawrZTb6/
+	 */
+    bindConfirmGDPRPurchase: function(){
+        $('.js-approve-GDPR-acceptance').off('click').on('click', function(){
+            var userId = $(this).data('id');
+            var classifiedId = $(this).data('classid');
+            ga('send', 'event', 'Kupci', 'click', 'Dozvoljava prosleđivanje podataka');
+            $.ajax('/profile/purchase/GDPR', {
+                type: "POST",
+                data: { method: 'approve', userId: userId, classifiedId: classifiedId},
+                success: function(data){
+                PA.common.loaderStop();
+                if (data.success == true) {
+                    $('.uk-modal-close').click();
+                    location.reload();
+                }
+                else {
+                    UIkit.modal.alert(data.message, {
+                        'labels' : {
+                            'Ok' : 'U redu'
+                        }
+                    });
+                }
+                }
+            });
+        });
+    },
+
+	/**
+	 * Buttons for a modal denying that we can send user information to 3rd party members /c/E4HJrMft/
+	 */
+    bindDenyGDPRPurchase: function(){
+        $('.js-deny-GDPR-acceptance').off('click').on('click', function(){
+            var userId = $(this).data('id');
+            var classifiedId = $(this).data('classid');
+            ga('send', 'event', 'Kupci', 'click', 'Ne dozvoljava prosleđivanje podataka');
+	        $.ajax('/profile/purchase/GDPR', {
+	            type: "POST",
+		        data: { method: 'deny', userId: userId, classifiedId: classifiedId },
+	            success: function(data){
+	            PA.common.loaderStop();
+	            if (data.success == true){
+	                $('.uk-modal-close').click();
+	                location.reload();
+	            } else {
+	                UIkit.modal.alert(data.message, {
+                        'labels' : {
+                            'Ok' : 'U redu'
+                        }
+                    });
+	                }
+	            }
+            });
+        });
+    },
+
+	/**
+	 * Buttons for confirming purchases trough buttons inside notifications /c/E4HJrMft/
+	 */
+    bindConfirmPurchase: function(){
+        $('.js-approve-purchase').off('click').on('click', function(){
+            var purchaseId = $(this).data('id');
+            $.ajax('/profile/purchase/'+purchaseId+'/confirm', {
+                type: "POST",
+                success: function(data){
+                    PA.common.loaderStop();
+                    if (data.success == true) {
+                        $('.uk-modal-close').click();
+                        location.reload();
+                    }
+                    else {
+                        UIkit.modal.alert(data.message, {
+                            'labels' : {
+                                'Ok' : 'U redu'
+                            }
+                        });
+                    }
+                }
+            });
+        });
+    },
+
+	/**
+	 * Primary buttons for denying purchases trough buttons inside notifications /c/eawrZTb6/
+	 */
+    bindDenyPurchase: function(){
+        $('.js-deny-purchase').off('click').on('click', function(){
+            var purchaseId = $(this).data('id');
+                UIkit.modal.confirm('Da li ste sigurni da želite da odbijete kupovinu?', function () {
+                    $.ajax('/profile/purchase/'+purchaseId+'/deny', {
+                        type: "POST",
+                        success: function(data){
+                        PA.common.loaderStop();
+                        if (data.success == true){
+                            $('.uk-modal-close').click();
+                            location.reload();
+                        } else {
+                            UIkit.modal.alert(data.message, {
+                                'labels' : {
+                                    'Ok' : 'U redu'
+                                }
+                            });
+                            }
+                        }
+                    });
+            }, {
+               'labels': {
+                   'Ok' : 'Da',
+                   'Cancel': 'Odustani'
+               }
+            });
+        });
+    },
+
+	/**
+	 * Buttons for confirming purchases trough buttons inside notifications for the case where there are multiple purchases
+	 */
+	bindConfirmMultiplePotentialPurchases: function(){
+		$('.js-approve-purchase-radio').off('click').on('click', function(event){
+			var $formHolder = $(event.target).closest('.form-radio-holder');
+			var checkedPurchaseId = $formHolder.find('input:checked').val();
+			var uncheckedPurchaseIds = [];
+			var uncheckedPurchases = $formHolder.find('input:not(:checked)');
+			$.each(uncheckedPurchases, function(index, element){uncheckedPurchaseIds.push(element.value)});
+			var classifiedId = $(this).data('classifiedid');
+
+			$.ajax('/profile/multiple/purchase/confirm', {
+				type: "POST",
+				data: {
+					'confirmed': checkedPurchaseId,
+					'forDeletion': uncheckedPurchaseIds,
+					'notification-classifiedid': classifiedId
+				},
+				success: function(data){
+					PA.common.loaderStop();
+					if (data.success == true) {
+						$('.uk-modal-close').click();
+						location.reload();
+					}
+					else {
+						UIkit.modal.alert(data.message, {
+							'labels' : {
+								'Ok' : 'U redu'
+							}
+						});
+					}
+				}
+			});
+		});
+	},
+
+	/**
+	 * Primary buttons for denying purchases trough buttons inside notifications for the case where there are multiple purchases
+	 */
+	bindDenyMultiplePotentialPurchases: function(){
+		$('.js-deny-purchase-radio').off('click').on('click', function(){
+			var classifiedId = $(this).data('classifiedid');
+			var $formHolder = $(event.target).closest('.form-radio-holder');
+			var purchases = $formHolder.find('input');
+			var purchaseIds = [];
+			$.each(purchases, function(index, element){purchaseIds.push(element.value)});
+
+			UIkit.modal.confirm('Da li ste sigurni da želite da odbijete kupovinu?', function () {
+				$.ajax('/profile/multiple/purchase/deny', {
+					type: "POST",
+					data: {
+						'forDeletion': purchaseIds,
+						'notification-classifiedid': classifiedId
+					},
+					success: function(data){
+						PA.common.loaderStop();
+						if (data.success == true){
+							$('.uk-modal-close').click();
+							location.reload();
+						} else {
+							UIkit.modal.alert(data.message, {
+								'labels' : {
+									'Ok' : 'U redu'
+								}
+							});
+						}
+					}
+				});
+			}, {
+				'labels': {
+					'Ok' : 'Da',
+					'Cancel': 'Odustani'
+				}
+			});
+		});
+	},
+
+	/**
+	 * Buttons for confirming potential purchases trough buttons inside notifications
+	 */
+	bindConfirmPotentialPurchase: function(){
+		$('.js-approve-potential-purchase').off('click').on('click', function(event){
+			var checkedPurchaseId = $(this).data('id');
+			var classifiedId = $(this).data('classifiedid');
+
+			$.ajax('/profile/multiple/purchase/confirm', {
+				type: "POST",
+				data: {
+					'confirmed': checkedPurchaseId,
+					'forDeletion': [],
+					'notification-classifiedid': classifiedId
+				},
+				success: function(data){
+					PA.common.loaderStop();
+					if (data.success == true) {
+						$('.uk-modal-close').click();
+						location.reload();
+					}
+					else {
+						UIkit.modal.alert(data.message, {
+							'labels' : {
+								'Ok' : 'U redu'
+							}
+						});
+					}
+				}
+			});
+		});
+	},
+
+	/**
+	 * Buttons for deleting potential purchases trough buttons inside notifications
+	 */
+	bindDenyPotentialPurchase: function(){
+		$('.js-deny-potential-purchase').off('click').on('click', function(event){
+
+			var forDeletion = $(this).data('id');
+			var classifiedId = $(this).data('classifiedid');
+
+			UIkit.modal.confirm('Da li ste sigurni da želite da odbijete kupovinu?', function () {
+				$.ajax('/profile/multiple/purchase/deny', {
+					type: "POST",
+					data: {
+						'confirmed': null,
+						'forDeletion': [forDeletion],
+						'notification-classifiedid': classifiedId
+					},
+					success: function(data){
+						PA.common.loaderStop();
+						if (data.success == true){
+							$('.uk-modal-close').click();
+							location.reload();
+						} else {
+							UIkit.modal.alert(data.message, {
+								'labels' : {
+									'Ok' : 'U redu'
+								}
+							});
+						}
+					}
+				});
+			}, {
+				'labels': {
+					'Ok' : 'Da',
+					'Cancel': 'Odustani'
+				}
+			});
+		});
+	},
+
+    checkFeatureSuggestion: function(){
+        if (typeof $.cookie('featureSuggestionDailyCheck') == 'undefined' && typeof $.cookie('featureSuggestionPopupShowed') == 'undefined'){
+        // then check if we should show him popup
+        // it's checked once daily because of performance and not needed to be checked all the time
+        // do ajax
+        $.get('/profile/check-feature-suggestion', [], function(response){
+            if (response[1].showSuggestion === true){
+            ga('send', 'event', 'Korisnicki profil', 'View', 'Pop-up prikaz za isticanje u pretrazi');
+            UIkit.modal.confirm(response[1].html, function(){
+                    ga('send', 'event', 'Korisnicki profil', 'click', 'Klik na istakni pop-up za isticanje u pretrazi');
+                    $('.js-featuredSearch[data-id="'+response[1].classifiedId+'"]').data('requestpage', 'ads-active-feature-suggestion');
+                    $('.js-featuredSearch[data-id="'+response[1].classifiedId+'"]').trigger('click');
+                }, function(){
+                    $(this).data('request-page', '');
+                },{
+                    'labels' : {
+                        'Ok' : 'Istakni oglas',
+                        'Cancel' : 'Odustani'
+                    }
+                }
+            );
+            $.cookie('featureSuggestionPopupShowed', 1, { expires: 5 });
+            }
+            $.cookie('featureSuggestionDailyCheck', 1, { expires: 1 });
+        });
+        } else {
+        return false;
+        }
+    },
+
+	tutorialBuyer: function () {
+		var cookieTutDaly = $.cookie('tutLaterDalyBuyer');
+		if (typeof cookieTutDaly == 'undefined') {
+
+			$.cookie('tutLaterDalyBuyer', 1, { path: '/', expires: 1 });
+
+			var cookieTut = $.cookie('tutLaterBuyer');
+			if (typeof cookieTut == 'undefined') {
+				$('.tutLaterBuyer').on('click', function () {
+					var tutLater = 1;
+					$.cookie('tutLaterBuyer', tutLater, {path: '/', expires: 365*100});
+				});
+			} else {
+				$('.tutLaterBuyerBuyer').on('click', function () {
+					var tutLater = parseInt($.cookie('tutLaterBuyer'));
+					$.cookie('tutLaterBuyer', ++tutLater, {path: '/', expires: 365*100});
+				});
+			}
+
+			var tutLater = $.cookie('tutLaterBuyer');
+			if (typeof tutLater == 'undefined' || tutLater < 3) {
+				var modal = UIkit.modal("#tutBuy0");
+				if (modal.isActive()) {
+					modal.hide();
+				} else {
+					modal.show();
+				}
+			}
+		} else {
+			$.cookie('tutLaterDalyBuyer', 1, { path: '/', expires: 1 });
+		}
+
+		$('.js-buttonTut').on('click',function () {
+			$(this).trigger('.uk-modal-close');
+			var modalId = $(this).data('tutorial');
+			var modal = UIkit.modal("#" + modalId, {bgclose: false});
+			modal.show();
+		});
+
+		$('.js-doneTutorial').on('click', function () {
+			$('.js-playTutorial').slideUp();
+			$('.js-finishedTutorial').slideDown();
+			$.cookie('tutLaterBuyer', 3, {path: '/', expires: 365*100});
+		});
+	},
+
+    /**
+     * @param {String} csrf_token
+     */
+    bindDuplicateActive: function(csrf_token){
+        $('.js-duplicate').on('click', function(){
+            ga('send', 'event',  'Oglas',  'click',  'Postavi oglas ponovo');
+            var classifiedId = $(this).data('id');
+
+            PA.tools.classifiedDuplicateActive(classifiedId, csrf_token, function(){
+                PA.profile.reloadActiveAds();
+            });
+
+            return false;
+        });
+    },
+
+    /**
+     * @param {jQuery} $autocomplete
+     * @param {jQuery} $form
+     */
+    cityAutocomplete: function($autocomplete, $form, type){
+        type = (typeof type !== 'undefined') ? type : null;
+
+        $.UIkit.autocomplete($autocomplete, {
+            'template': '<ul class="uk-nav uk-nav-autocomplete uk-autocomplete-results">{{~items}}<li data-region="{{$item.text}}" data-value="{{$item.value}}"><a>{{$item.value}}<div>{{$item.text}}</div></a></li>{{/items}}</ul>',
+            'source': function(release) {
+                var items = [];
+
+                $.get('/json/common/cities',{ text: this.input.val() }, function(data){
+                    $.each(data, function(i, item){
+                        items.push({value: item['city'], title: item['city'], text: item['region']});
+                    });
+
+                    release(items);
+                });
+            },
+            minLength: 2
+        });
+
+        $.UIkit.on('selectitem.uk.autocomplete', function(e, data, ac){
+            $('#city', $form).val(data['city']);
+            var region = type === 'lot' ? $('.region') : $('#region');
+            $(region, $form).val(data['region']);
+            if (typeof region[0].sumo !== 'undefined')
+                {
+                region[0].sumo.reload();
+                }
+        });
+    }
+
+};
